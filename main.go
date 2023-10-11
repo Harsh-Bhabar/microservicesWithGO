@@ -1,44 +1,53 @@
 package main
 
 import (
+	"context"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"time"
+
+	"github.com/Harsh-Bhabar/products-api/handlers"
 )
 
 func main() {
 	fmt.Println("Starting")
 
-	http.HandleFunc("/", func(rw http.ResponseWriter, r *http.Request) {
-		log.Println("Hello")
+	logger := log.New(os.Stdout, "product-api", log.LstdFlags)
+	helloHandler := handlers.NewHello(logger)
+	byeHandler := handlers.NewBye(logger)
 
-		data, err := ioutil.ReadAll(r.Body)
+	serverMux := http.NewServeMux()
+	serverMux.Handle("/hello", helloHandler)
+	serverMux.Handle("/bye", byeHandler)
 
-		log.Println(string(data))
+	server := &http.Server{
+		Addr:         ":8080",
+		Handler:      serverMux,
+		IdleTimeout:  120 * time.Second,
+		ReadTimeout:  1 * time.Second,
+		WriteTimeout: 1 * time.Second,
+	}
 
+	go func() {
+		err := server.ListenAndServe()
 		if err != nil {
-			http.Error(rw, "Error occurred", http.StatusBadRequest)
-			// rw.WriteHeader(http.StatusBadRequest)
-			// rw.Write([]byte("Invalid"))
-			return
+			logger.Fatal(err)
 		}
+	}()
 
-		fmt.Fprintf(rw, "Hello")
+	// graceful shutdown
+	sigChan := make(chan os.Signal)
+	signal.Notify(sigChan, os.Interrupt)
+	signal.Notify(sigChan, os.Kill)
 
-	})
+	sig := <-sigChan
+	logger.Println("Reacreiced Terminate, graceful shutdown ", sig)
 
-	http.HandleFunc("/bye", func(rw http.ResponseWriter, r *http.Request) {
-		log.Println("Bye")
+	server.ListenAndServe()
 
-		data, _ := ioutil.ReadAll(r.Body)
-		log.Println(string(data))
-
-		fmt.Fprintf(rw, "Bye")
-
-	})
-
-	http.ListenAndServe(":8080", nil)
-
-	fmt.Println("Listening")
+	timeoutContext, _ := context.WithTimeout(context.Background(), 30*time.Second)
+	server.Shutdown(timeoutContext)
 }

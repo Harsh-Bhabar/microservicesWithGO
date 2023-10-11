@@ -18,13 +18,15 @@ func main() {
 	logger := log.New(os.Stdout, "product-api", log.LstdFlags)
 	helloHandler := handlers.NewHello(logger)
 	byeHandler := handlers.NewBye(logger)
+	productHandler := handlers.NewProducts(logger)
 
 	serverMux := http.NewServeMux()
 	serverMux.Handle("/hello", helloHandler)
 	serverMux.Handle("/bye", byeHandler)
+	serverMux.Handle("/products", productHandler)
 
 	server := &http.Server{
-		Addr:         ":8080",
+		Addr:         ":8000",
 		Handler:      serverMux,
 		IdleTimeout:  120 * time.Second,
 		ReadTimeout:  1 * time.Second,

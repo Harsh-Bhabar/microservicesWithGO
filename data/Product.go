@@ -2,6 +2,7 @@ package data
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"time"
 )
@@ -17,15 +18,51 @@ type Product struct {
 	UpdatedOn string  `json:"-"`
 }
 
+func (p *Product) Decoder(r io.Reader) error {
+	err := json.NewDecoder(r)
+	return err.Decode(p)
+}
+
 type Products []*Product
 
 func (p *Products) EncodeToJSON(w io.Writer) error {
-	encoder := json.NewEncoder(w)
-	return encoder.Encode(p)
+	err := json.NewEncoder(w)
+	return err.Encode(p)
 }
 
 func GetAllProducts() Products {
 	return ProductList
+}
+
+func AddProductToStaticDB(p *Product) {
+	p.ID = getNextId()
+	ProductList = append(ProductList, p)
+}
+
+func UpdateProduct(id int, p *Product) error {
+	pos, err := findProduct(id)
+	if err != nil {
+		return err
+	}
+	// fp.ID = id
+	ProductList[pos] = p
+	return nil
+}
+
+var ProdcutNotFound = fmt.Errorf("Product not found")
+
+func findProduct(id int) (int, error) {
+	for i, p := range ProductList {
+		if p.ID == id {
+			return i, nil
+		}
+	}
+	return -1, ProdcutNotFound
+}
+
+func getNextId() int {
+	lastProd := ProductList[len(ProductList)-1]
+	return lastProd.ID + 1
 }
 
 var ProductList = []*Product{

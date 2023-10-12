@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -33,9 +34,12 @@ func (p *Products) GetAllProducts(w http.ResponseWriter, r *http.Request) {
 func (p *Products) AddProduct(w http.ResponseWriter, r *http.Request) {
 	p.l.Println("Coming in POST")
 
-	product := &data.Product{}
+	// middleware
+	// product := r.Context().Value(KeyProduct{}).(data.Product)
+	// data.AddProductToStaticDB(&product)
 
-	// Attempt to decode the JSON data from the request body
+	//normally
+	product := &data.Product{}
 	if err := product.Decoder(r.Body); err != nil {
 		p.l.Println("Error decoding product:", err)
 		http.Error(w, "Unable to decode", http.StatusBadRequest)
@@ -84,6 +88,17 @@ func (p *Products) MiddlewareProductValidator(next http.Handler) http.Handler {
 		err := product.Decoder(r.Body)
 		if err != nil {
 			http.Error(rw, "Unable to decode", http.StatusBadRequest)
+			return
+		}
+
+		//validate the product
+		err = product.ValidateProduct()
+		if err != nil {
+			p.l.Println("Error validating product")
+			http.Error(rw,
+				fmt.Sprintf("Unable to validate, error - %s\n", err),
+				http.StatusBadRequest,
+			)
 			return
 		}
 

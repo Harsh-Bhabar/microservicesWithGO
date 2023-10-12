@@ -1,12 +1,13 @@
 package handlers
 
 import (
+	"context"
 	"log"
 	"net/http"
-	"regexp"
 	"strconv"
 
 	"github.com/Harsh-Bhabar/products-api/data"
+	"github.com/gorilla/mux"
 )
 
 type Products struct {
@@ -17,73 +18,28 @@ func NewProducts(l *log.Logger) *Products {
 	return &Products{l}
 }
 
-func (p *Products) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.Method == http.MethodGet {
-		p.GetAllProducts(w, r)
-		return
-	}
-
-	if r.Method == http.MethodPost {
-		p.AddProduct(w, r)
-		return
-	}
-
-	if r.Method == http.MethodPut {
-		p.l.Println("Coming in PUT")
-		// gorilla mux should be used here, will refractor
-		regex := regexp.MustCompile(`/([0-9]+)`)
-		g := regex.FindAllStringSubmatch(r.URL.Path, -1)
-
-		p.l.Println("regex ", regex)
-		p.l.Println("g", g)
-
-		if len(g) != 1 {
-			p.l.Println("Invalid URL, more than one ID.")
-			http.Error(w, "Invalid URL", http.StatusBadRequest)
-			return
-		}
-		if len(g[0]) != 2 {
-			p.l.Println("Invalid URL, more than one capture group.")
-			http.Error(w, "Invalid URL", http.StatusBadRequest)
-			return
-		}
-
-		idString := g[0][1]
-		id, err := strconv.Atoi(idString)
-
-		if err != nil {
-			p.l.Println("Invalid URL, while converting.")
-			http.Error(w, "Invalid URL", http.StatusBadRequest)
-			return
-		}
-
-		p.l.Println("Id - ", id)
-		p.UpdateProduct(id, w, r)
-		return
-	}
-
-	// catch all else
-	w.WriteHeader(http.StatusMethodNotAllowed)
-}
-
 func (p *Products) GetAllProducts(w http.ResponseWriter, r *http.Request) {
+
+	p.l.Println("COming in GET ")
+
 	productsList := data.GetAllProducts()
 	err := productsList.EncodeToJSON(w)
 
 	if err != nil {
 		http.Error(w, "Unable to marshal", http.StatusInternalServerError)
 	}
-	// another way by using Marshal
-	// data, err := json.Marshal(productsList) // another way
-	// w.Write(data)
 }
 
 func (p *Products) AddProduct(w http.ResponseWriter, r *http.Request) {
-	product := &data.Product{}
-	err := product.Decoder(r.Body)
+	p.l.Println("Coming in POST")
 
-	if err != nil {
+	product := &data.Product{}
+
+	// Attempt to decode the JSON data from the request body
+	if err := product.Decoder(r.Body); err != nil {
+		p.l.Println("Error decoding product:", err)
 		http.Error(w, "Unable to decode", http.StatusBadRequest)
+		return
 	}
 
 	p.l.Println("product", product)
@@ -91,18 +47,21 @@ func (p *Products) AddProduct(w http.ResponseWriter, r *http.Request) {
 	data.AddProductToStaticDB(product)
 }
 
-func (p *Products) UpdateProduct(id int, w http.ResponseWriter, r *http.Request) {
-	p.l.Println("Updating product", id)
+func (p *Products) UpdateProduct(w http.ResponseWriter, r *http.Request) {
 
-	product := &data.Product{}
+	p.l.Println("COming in pUT ")
 
-	err := product.Decoder(r.Body)
+	params := mux.Vars(r)
+	id, err := strconv.Atoi(params["id"])
 	if err != nil {
-		http.Error(w, "Unable to encode", http.StatusBadRequest)
+		http.Error(w, "Unable to parse id", http.StatusBadRequest)
 		return
 	}
 
-	err = data.UpdateProduct(id, product)
+	p.l.Println("Updating product", id)
+
+	product := r.Context().Value(KeyProduct{}).(data.Product)
+	err = data.UpdateProduct(id, &product)
 
 	if err == data.ProdcutNotFound {
 		http.Error(w, "Product not found", http.StatusNotFound)
@@ -113,4 +72,25 @@ func (p *Products) UpdateProduct(id int, w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+}
+
+type KeyProduct struct{}
+
+func (p *Products) MiddlewareProductValidator(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+
+		// Validate the product data
+		product := &data.Product{}
+		err := product.Decoder(r.Body)
+		if err != nil {
+			http.Error(rw, "Unable to decode", http.StatusBadRequest)
+			return
+		}
+
+		// Set the product data in the context
+		ctx := context.WithValue(r.Context(), KeyProduct{}, *product)
+		req := r.WithContext(ctx)
+
+		next.ServeHTTP(rw, req)
+	})
 }

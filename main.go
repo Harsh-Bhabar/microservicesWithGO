@@ -10,20 +10,27 @@ import (
 	"time"
 
 	"github.com/Harsh-Bhabar/products-api/handlers"
+	"github.com/gorilla/mux"
 )
 
 func main() {
 	fmt.Println("Starting")
 
 	logger := log.New(os.Stdout, "product-api", log.LstdFlags)
-	helloHandler := handlers.NewHello(logger)
-	byeHandler := handlers.NewBye(logger)
+	// helloHandler := handlers.NewHello(logger)
+	// byeHandler := handlers.NewBye(logger)
 	productHandler := handlers.NewProducts(logger)
 
-	serverMux := http.NewServeMux()
-	serverMux.Handle("/hello", helloHandler)
-	serverMux.Handle("/bye", byeHandler)
-	serverMux.Handle("/products", productHandler)
+	serverMux := mux.NewRouter()
+	getRouter := serverMux.Methods(http.MethodGet).Subrouter()
+	putRouter := serverMux.Methods(http.MethodPut).Subrouter()
+	postRouter := serverMux.Methods(http.MethodPost).Subrouter()
+	//middleware validation in PUT routes
+	putRouter.Use(productHandler.MiddlewareProductValidator)
+
+	getRouter.HandleFunc("/products", productHandler.GetAllProducts)
+	putRouter.HandleFunc("/product/{id:[0-9]+}", productHandler.UpdateProduct)
+	postRouter.HandleFunc("/product", productHandler.AddProduct)
 
 	server := &http.Server{
 		Addr:         ":8000",

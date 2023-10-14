@@ -1,3 +1,13 @@
+// package classification for product-api
+
+// Documentation for product-api
+// schemes: http
+// Basepath: /products
+// Version: 1.0.0
+// Consumes: application/json
+// Produces: application/json
+//
+
 package handlers
 
 import (
